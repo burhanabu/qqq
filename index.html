@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AccentLive Pro</title>
+<style>
+:root{color-scheme:dark;--bg:#1b2630;--panel:#243541;--line:#37495a;--ink:#eaf0f3;--mute:#9fb2bf;--key:#dde7ec;--keyink:#15212a;--edge:#9db0bc;--air:#ffb020;--ok:#4fd1a1;--bad:#ff7a6b;--f:Bahnschrift,"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--f)}
+.app{max-width:1040px;margin:0 auto;padding:20px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:22px;font-weight:600;letter-spacing:.2px}
+#st{margin:2px 0 0;color:var(--mute);font-size:13px}
+#st.bad{color:var(--bad)}
+.call{display:flex;align-items:center;gap:12px}
+.air{width:12px;height:12px;border-radius:50%;background:var(--line)}
+.air.on{background:var(--air);box-shadow:0 0 0 4px rgba(255,176,32,.25)}
+button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:9px 16px;background:var(--line);color:var(--ink)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--air);outline-offset:2px}
+.go{background:var(--ok);color:#06251b;font-weight:600;padding:10px 22px}
+.go.end{background:var(--bad);color:#2b0a05}
+main{display:grid;grid-template-columns:1fr 310px;gap:24px;margin-top:20px}
+@media(max-width:820px){main{grid-template-columns:1fr}}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.key{background:var(--key);color:var(--keyink);border-radius:10px;padding:14px 14px 12px;text-align:left;min-height:92px;border-bottom:5px solid var(--edge);display:flex;flex-direction:column;justify-content:space-between;transition:transform .05s,border-bottom-width .05s}
+.key:active{transform:translateY(3px);border-bottom-width:2px}
+.key b{font-size:16px;font-weight:600}
+.key small{display:flex;justify-content:space-between;color:#4a5d6a;font-size:12px}
+.key.off{opacity:.45}
+.say{display:flex;gap:8px;margin-top:18px}
+.say input{flex:1}
+input,select,textarea{width:100%;background:#16212a;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit}
+.heard{margin-top:14px;color:var(--mute);font-size:13px;min-height:20px}
+aside{background:var(--panel);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;align-self:start}
+label{display:flex;flex-direction:column;gap:5px;color:var(--mute);font-size:13px}
+label.chk{flex-direction:row;align-items:center;gap:8px}
+label.chk input{width:auto}
+.note{margin:0;font-size:12px;color:var(--mute);border-left:3px solid var(--air);padding-left:10px}
+textarea{resize:vertical}
+</style></head>
+<body><div class="app">
+<header>
+  <div><h1>AccentLive Pro</h1><p id="st">Starting engine…</p></div>
+  <div class="call"><span id="air" class="air"></span><button id="callbtn" class="go">Start call</button></div>
+</header>
+<main>
+  <section>
+    <div id="keys" class="keys"></div>
+    <div class="say"><input id="txt" placeholder="Type a line and press Enter" autocomplete="off"><button id="stop">Stop</button></div>
+    <div id="heard" class="heard"></div>
+  </section>
+  <aside>
+    <label>Your name<input id="name" autocomplete="off"></label>
+    <label>Company<input id="company" autocomplete="off"></label>
+    <p class="note" id="disc"></p>
+    <label>Voice<select id="voice"></select></label>
+    <label>Speed <span id="spv"></span><input type="range" id="speed" min="0.8" max="1.3" step="0.05"></label>
+    <label>Send voice to (virtual cable)<select id="cable"></select></label>
+    <label>Hear it myself on<select id="monitor"></select></label>
+    <label class="chk"><input type="checkbox" id="live"> Live voice: speak instead of typing</label>
+    <label>Microphone for live voice<select id="mic"></select></label>
+    <label>Buttons, one per line: Name | text<textarea id="btns" rows="7"></textarea></label>
+    <button id="save">Save settings</button>
+  </aside>
+</main></div>
+<script>
+const $=i=>document.getElementById(i);let S=null,first=true;
+const post=(u,b)=>fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(r=>r.json());
+function fill(el,list,sel,none){el.replaceChildren();if(none){const o=document.createElement("option");o.value="";o.textContent=none;el.append(o)}
+ for(const d of list){const o=document.createElement("option");o.value=d.id??d;o.textContent=d.name??d;if(String(o.value)===String(sel))o.selected=true;el.append(o)}}
+const lines=bs=>bs.map(b=>b.label+" | "+b.text).join("\n");
+const parse=t=>t.split("\n").map(x=>x.trim()).filter(Boolean).slice(0,30).map(x=>{const i=x.indexOf("|");
+ return i>0?{label:x.slice(0,i).trim(),text:x.slice(i+1).trim()}:{label:x.slice(0,18),text:x}});
+const dev=v=>v===""?null:Number(v);
+function form(){const c=S.cfg;$("name").value=c.name;$("company").value=c.company;$("speed").value=c.speed;$("spv").textContent=c.speed+"x";
+ $("live").checked=c.live;$("btns").value=lines(c.buttons);fill($("voice"),S.voices,c.voice);
+ fill($("cable"),S.outs,c.cable,"Choose…");fill($("monitor"),S.outs,c.monitor,"Off");fill($("mic"),S.ins,c.mic,"Default")}
+function keys(){const k=$("keys");k.replaceChildren();S.cfg.buttons.forEach((b,i)=>{const e=document.createElement("button");
+ e.className="key"+(S.call?"":" off");const l=document.createElement("b");l.textContent=b.label;const s=document.createElement("small");
+ const t=document.createElement("span");t.textContent=b.text.length>26?b.text.slice(0,25)+"…":b.text;const n=document.createElement("span");n.textContent=i<9?i+1:"";
+ s.append(t,n);e.append(l,s);e.onclick=()=>press(i);k.append(e)})}
+const hold={};const press=i=>{if(!(S&&S.call)||hold[i])return;hold[i]=1;setTimeout(()=>hold[i]=0,500);post("/api/button",{i})};
+async function load(){try{S=await (await fetch("/api/state")).json()}catch(e){$("st").textContent="Engine is not running";$("st").className="bad";return}
+ if(first&&S.voices.length){form();first=false}
+ if(!S.cfg)return;
+ const st=$("st");st.className=S.err?"bad":"";
+ st.textContent=S.err||(!S.cable_found?"Virtual microphone driver not found. Install VB-Cable once (vb-audio.com/Cable), then restart.":!S.ready?"Loading voices… first start can take a few minutes":S.prepared<S.total?"Preparing buttons "+S.prepared+"/"+S.total:S.call?"On call. Buttons play instantly.":"Ready. Buttons are prepared.");
+ $("air").className="air"+(S.call?" on":"");const cb=$("callbtn");cb.textContent=S.call?"End call":"Start call";cb.className="go"+(S.call?" end":"");
+ $("disc").textContent="Every call opens with: “"+S.disclosure+"”";$("heard").textContent=S.heard.length?"Heard: "+S.heard.join("  ·  "):"";
+ const sig=JSON.stringify(S.cfg.buttons)+S.call;if(sig!==load.sig){load.sig=sig;keys()}}
+$("callbtn").onclick=async()=>{const r=await post("/api/call",{on:!S.call});if(r.error){$("st").textContent=r.error;$("st").className="bad"}load()};
+$("save").onclick=async()=>{await post("/api/config",{name:$("name").value.trim(),company:$("company").value.trim(),voice:$("voice").value,
+ speed:Number($("speed").value),cable:dev($("cable").value),monitor:dev($("monitor").value),mic:dev($("mic").value),live:$("live").checked,buttons:parse($("btns").value)});
+ first=true;load()};
+$("speed").oninput=e=>$("spv").textContent=e.target.value+"x";
+$("txt").onkeydown=e=>{if(e.key==="Enter"&&e.target.value.trim()){post("/api/say",{text:e.target.value});e.target.value=""}};
+$("stop").onclick=()=>post("/api/stop");
+document.onkeydown=e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==="Escape")post("/api/stop");
+ else if(!e.repeat&&/^[1-9]$/.test(e.key))press(Number(e.key)-1)};
+load();setInterval(load,1000);
+</script></body></html>
