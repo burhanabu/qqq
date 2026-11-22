@@ -1,0 +1,39 @@
+name: Build AccentLivePro (Windows, everything inside)
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install packages
+        shell: bash
+        run: |
+          pip install -r requirements.txt pyinstaller huggingface_hub
+      - name: Download voice and speech models (bundled into the package)
+        shell: bash
+        run: |
+          mkdir -p models
+          B=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0
+          curl -L -o models/kokoro.onnx $B/kokoro-v1.0.int8.onnx
+          curl -L -o models/voices.bin $B/voices-v1.0.bin
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-base.en', local_dir='models/whisper')"
+      - name: Build
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --noconsole --name AccentLivePro \
+            --collect-all kokoro_onnx --collect-all espeakng_loader --collect-all language_tags \
+            --collect-all phonemizer --collect-all faster_whisper --collect-all ctranslate2 \
+            --collect-all onnxruntime --collect-all sounddevice --collect-all _sounddevice_data \
+            --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on app.py
+          cp index.html dist/AccentLivePro/
+          cp -r models dist/AccentLivePro/models
+          cp README.txt dist/AccentLivePro/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AccentLivePro-windows
+          path: dist/AccentLivePro
